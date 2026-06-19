@@ -38,12 +38,14 @@ func magnetSectorMM(rIn, rOut, centreDeg, halfDeg float64) [][2]float64 {
 // magnets (27..29 mm) magnetised radially out/in — enough to drive a real field.
 func twoPoleMotor() *MotorDescriptor {
 	const muIron = 4000
+	// Magnets are GLUED to the rotor: the magnet inner radius (26) coincides with the
+	// rotor outer radius — node-merging must reconcile that shared boundary.
 	mag := func(centre float64) MotorRegion {
 		c := centre * math.Pi / 180
-		rm := 28.0
+		rm := 27.0
 		return MotorRegion{
 			Name:  "Magnet",
-			Loops: [][][2]float64{magnetSectorMM(27, 29, centre, 70)},
+			Loops: [][][2]float64{magnetSectorMM(26, 28, centre, 70)},
 			Seed:  [2]float64{rm * math.Cos(c), rm * math.Sin(c)},
 			MuR:   1.05, HcAm: 900000, HcAngleDeg: centre, // radial, outward at the pole centre
 		}
@@ -62,12 +64,12 @@ func twoPoleMotor() *MotorDescriptor {
 	}
 }
 
-// TestBuildMotorProblemDomain checks the multi-region assembly: a material + label per
-// region plus the default air block, and the A=0 outer boundary present.
+// TestBuildMotorProblemDomain checks the multi-region assembly: stator + rotor iron,
+// and each magnet placed in its own epoxy bond-line shell, plus the default air block.
 func TestBuildMotorProblemDomain(t *testing.T) {
 	prob, mesh := buildMotorProblem(twoPoleMotor())
-	if len(prob.Materials) != 5 { // air + 4 regions (stator, rotor, 2 magnets)
-		t.Errorf("materials = %d, want 5 (air + 4 regions)", len(prob.Materials))
+	if len(prob.Materials) != 5 { // air + stator + rotor + 2 magnets
+		t.Errorf("materials = %d, want 5 (air + stator + rotor + 2 magnets)", len(prob.Materials))
 	}
 	if len(prob.Labels) != 5 || !prob.Labels[0].IsDefault {
 		t.Errorf("labels = %d (default=%v), want 5 with label 0 default", len(prob.Labels), prob.Labels[0].IsDefault)
@@ -75,12 +77,9 @@ func TestBuildMotorProblemDomain(t *testing.T) {
 	if len(mesh.Regions) != 4 {
 		t.Errorf("seeded regions = %d, want 4 (air is the default, unseeded)", len(mesh.Regions))
 	}
-	// A magnet material must carry directed coercivity.
-	if prob.Materials[3].Hc == 0 || prob.Materials[3].HcAngle != 0 {
-		// material[3] is the first magnet (centre 0°)
-		if prob.Materials[3].Hc == 0 {
-			t.Error("magnet material has no coercivity")
-		}
+	// material[3] is the first magnet (centre 0°) — it must carry coercivity.
+	if prob.Materials[3].Hc == 0 {
+		t.Error("magnet material has no coercivity")
 	}
 }
 

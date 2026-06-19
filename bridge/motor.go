@@ -37,6 +37,7 @@ type MotorRegion struct {
 // the air gap, the shaft, the surrounding air — solves as the default air material.
 type MotorDescriptor struct {
 	StatorOuterDiaMM float64       `json:"statorOuterDiaMM"`
+	GlueGapMM        float64       `json:"glueGapMM,omitempty"` // magnet↔iron bond line; 0 ⇒ default
 	Regions          []MotorRegion `json:"regions"`
 }
 
@@ -62,34 +63,141 @@ func readMotorDescriptor(path string) (*MotorDescriptor, error) {
 // domain, each region seeds a labelled material area, and air is the default label so
 // the gaps (air gap, shaft, surrounding air) solve without explicit regions.
 func buildMotorProblem(d *MotorDescriptor) (*femProblem, *polyMesh) {
-	prob := &femProblem{Frequency: 0, Precision: 1e-8, Planar: true,
-		Boundaries: []femBoundary{{BdryType: 0}}}
-	// Material 0 is air; one material per region follows (iron or a directed magnet).
-	prob.Materials = []femMaterial{{MuX: 1, MuY: 1}}
-	// Label 0 is the default air label (covers every unseeded element). Region labels
-	// follow, each pointing at its 1-based material.
-	prob.Labels = []femLabel{{X: 0, Y: 0, BlockType: 1, InGroup: 0}}
-
+	gap := d.GlueGapMM
+	if gap <= 0 {
+		gap = defaultGlueGapMM
+	}
 	mesh := &polyMesh{}
 	addOuterBoundary(mesh, d.StatorOuterDiaMM/2*mmToCm*outerBoundaryFactor)
-	prob.Labels[0] = airDefaultLabel(d.StatorOuterDiaMM / 2 * mmToCm * (1 + outerBoundaryFactor) / 2)
+	placed := placeMotorRegions(mesh, d.Regions, gap)
+	mergeCoincidentNodes(mesh) // collapse any exactly-coincident boundary nodes
 
-	for i, r := range d.Regions {
-		prob.Materials = append(prob.Materials, regionMaterialFEM(r))
-		matIdx := i + 2 // 1-based material index (material[i+1])
-		for _, loop := range r.Loops {
-			addClosedLoop(mesh, loop, 0) // interior boundary, no BC
-		}
-		area := regionMeshArea(r)
+	prob := &femProblem{Frequency: 0, Precision: 1e-8, Planar: true,
+		Boundaries: []femBoundary{{BdryType: 0}}}
+	// Material 0 is air, the default block that covers every unseeded element (air gap,
+	// shaft, surrounding air). Each placed region's material + label follows it.
+	prob.Materials = []femMaterial{{MuX: 1, MuY: 1}}
+	prob.Labels = []femLabel{airDefaultLabel(d.StatorOuterDiaMM / 2 * mmToCm * (1 + outerBoundaryFactor) / 2)}
+	for i, pr := range placed {
+		prob.Materials = append(prob.Materials, pr.mat)
 		mesh.Regions = append(mesh.Regions, polyRegion{
-			X: r.Seed[0] * mmToCm, Y: r.Seed[1] * mmToCm,
-			Label: len(prob.Labels) + 1, MaxArea: area, // 1-based label index
+			X: pr.seed[0] * mmToCm, Y: pr.seed[1] * mmToCm, Label: i + 2, MaxArea: pr.area,
 		})
 		prob.Labels = append(prob.Labels, femLabel{
-			X: r.Seed[0] * mmToCm, Y: r.Seed[1] * mmToCm, BlockType: matIdx, MaxArea: area,
+			X: pr.seed[0] * mmToCm, Y: pr.seed[1] * mmToCm, BlockType: i + 2, MaxArea: pr.area,
 		})
 	}
 	return prob, mesh
+}
+
+// placedRegion is one labelled material area: an interior seed (mm), the material, and
+// the element-area bound (cm²).
+type placedRegion struct {
+	seed [2]float64
+	mat  femMaterial
+	area float64
+}
+
+// placeMotorRegions adds every descriptor region's boundaries to the mesh and returns
+// the labelled material areas (iron, or a directed magnet). A surface magnet is glued
+// to the rotor iron, so its descriptor boundary coincides with the rotor's — and a
+// coincident boundary (same curve, different sampling) trips fkern's singular flag.
+// Each magnet is therefore inset toward its seed by the glue gap, leaving a thin
+// separation that solves as the default air.
+//
+// The bond is magnetically epoxy ≈ μr 1 (the inset air gap gives the same field), so
+// it is not meshed as its own material here; it is carried as descriptor metadata
+// (MotorDescriptor.GlueGapMM) for the future thermal-simulation add-in, whose
+// constitutive problem DOES depend on the epoxy's low thermal conductivity.
+func placeMotorRegions(mesh *polyMesh, regions []MotorRegion, gap float64) []placedRegion {
+	placed := make([]placedRegion, 0, len(regions))
+	for _, r := range regions {
+		for _, loop := range r.Loops {
+			if r.HcAm > 0 {
+				loop = insetLoop(loop, r.Seed, gap)
+			}
+			addClosedLoop(mesh, loop, 0)
+		}
+		placed = append(placed, placedRegion{seed: r.Seed, mat: regionMaterialFEM(r), area: regionMeshArea(r)})
+	}
+	return placed
+}
+
+// insetLoop shrinks a loop toward seed by gapMM (each vertex moves gapMM closer to the
+// seed) — the magnet's glue-gap separation from the iron it is bonded to.
+func insetLoop(loopMM [][2]float64, seed [2]float64, gapMM float64) [][2]float64 {
+	out := make([][2]float64, len(loopMM))
+	for i, p := range loopMM {
+		dx, dy := p[0]-seed[0], p[1]-seed[1]
+		d := math.Hypot(dx, dy)
+		if d <= gapMM {
+			out[i] = p
+			continue
+		}
+		f := (d - gapMM) / d
+		out[i] = [2]float64{seed[0] + dx*f, seed[1] + dy*f}
+	}
+	return out
+}
+
+// defaultGlueGapMM is the magnet↔iron bond line used when the descriptor leaves
+// GlueGapMM unset.
+const defaultGlueGapMM = 0.05
+
+// nodeMergeTolCm: nodes closer than this (cm) are the same mesh node. Surface magnets
+// are glued to the rotor, so the descriptor's magnet-inner and rotor-outer arcs lie on
+// top of each other; merging them to one shared edge is what keeps fkern's matrix
+// non-singular at any pole count.
+const nodeMergeTolCm = 1e-4
+
+// mergeCoincidentNodes snaps coincident nodes to a single index and drops the resulting
+// duplicate boundary segments, so adjacent regions share their common edge.
+func mergeCoincidentNodes(mesh *polyMesh) {
+	canon := snapNodes(mesh)
+	mesh.Segments = dedupSegments(mesh.Segments, canon)
+}
+
+// snapNodes replaces the mesh nodes with the de-duplicated set (nodes within
+// nodeMergeTolCm collapse to one) and returns each old index's canonical index.
+func snapNodes(mesh *polyMesh) []int {
+	index := map[[2]int64]int{}
+	canon := make([]int, len(mesh.Nodes))
+	var unique []polyNode
+	for i, n := range mesh.Nodes {
+		k := [2]int64{int64(math.Round(n.X / nodeMergeTolCm)), int64(math.Round(n.Y / nodeMergeTolCm))}
+		j, ok := index[k]
+		if !ok {
+			j = len(unique)
+			index[k] = j
+			unique = append(unique, n)
+		}
+		canon[i] = j
+	}
+	mesh.Nodes = unique
+	return canon
+}
+
+// dedupSegments remaps segments to canonical node indices and drops collapsed and
+// duplicate (undirected) edges.
+func dedupSegments(in []polySegment, canon []int) []polySegment {
+	seen := map[[2]int]bool{}
+	out := in[:0:0]
+	for _, s := range in {
+		a, b := canon[s.N0], canon[s.N1]
+		if a == b {
+			continue
+		}
+		key := [2]int{a, b}
+		if a > b {
+			key = [2]int{b, a}
+		}
+		if seen[key] {
+			continue
+		}
+		seen[key] = true
+		out = append(out, polySegment{N0: a, N1: b, Marker: s.Marker})
+	}
+	return out
 }
 
 // RunMotorStudy is the Motor Designer → FEMM interop: read a motor cross-section
