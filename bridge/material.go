@@ -18,12 +18,11 @@ var air = regionMaterial{name: "Air", muR: 1}
 
 // resolveRegionMaterials maps each section region to a FEMM block material.
 //
-// GAP #3 (the headline finding): wire.MaterialInfo carries Mechanical, Thermal and
-// Electrical groups but NO Magnetic group — there is no relative permeability,
-// coercivity, or B-H curve on a host material. So magnetostatics cannot read its
-// governing property from the host; the add-in falls back to its own library until a
-// types.Magnetic group exists. Electrical conductivity is recoverable (σ = 1/ρ) and
-// IS read from the host.
+// GAP #3 (now CLOSED, API 0.69.0): wire.MaterialInfo carries a types.Magnetic group —
+// relative permeability, remanence Br and coercivity Hc — so magnetostatics reads its
+// governing property straight off the host material. Electrical conductivity is still
+// recovered from resistivity (σ = 1/ρ). A non-magnetic (or unset) host material falls
+// back to air so an unassigned region still solves.
 func (e *Engine) resolveRegionMaterials(s *section) ([]regionMaterial, error) {
 	list, err := e.api.Materials().List()
 	if err != nil {
@@ -37,14 +36,19 @@ func (e *Engine) resolveRegionMaterials(s *section) ([]regionMaterial, error) {
 	return mats, nil
 }
 
-// magneticFromHost shows the gap concretely: only σ (from resistivity) survives the
-// trip from the host; μ_r and H_c have no source field on MaterialInfo and fall back
-// to an air-like default until a types.Magnetic group exists.
+// magneticFromHost reads a FEMM block material from a host material's Magnetic group
+// (API 0.69.0): μ_r for both soft cores and the recoil line of a permanent magnet, plus
+// H_c [A/m] for a magnet. σ comes from electrical resistivity. A non-magnetic material
+// keeps the air default (μ_r = 1). Coercivity is converted kA/m → A/m for the solver.
 func magneticFromHost(m wire.MaterialInfo) regionMaterial {
 	r := air
 	r.name = m.DisplayName
 	if m.Electrical.Resistivity > 0 {
 		r.sigma = 1.0 / m.Electrical.Resistivity / 1e6 // Ω·m → MS/m
+	}
+	if m.Magnetic.IsMagnetic() {
+		r.muR = m.Magnetic.RelativePermeability
+		r.coercivity = m.Magnetic.Coercivity * 1000 // kA/m → A/m
 	}
 	return r
 }
