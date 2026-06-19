@@ -109,3 +109,31 @@ jobs:
         with:
           name: oblikovati-femm-bridge-${{ matrix.os }}
           path: build/oblikovati-femm-bridge.*
+
+  # Build the vendored FEMM solver (fkern) + Triangle mesher headless on macOS and
+  # Linux via CMake. This is the AFPL-licensed third-party solver the add-in invokes
+  # as a subprocess (vendor-src/femm/NOTICE.md); proving it builds on both platforms
+  # on every push is the point of the port.
+  femm-solver:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v5
+      - name: Build fkern + triangle (CMake)
+        run: |
+          cmake -S vendor-src/femm -B vendor-src/femm/build -DCMAKE_BUILD_TYPE=Release
+          cmake --build vendor-src/femm/build -j
+      - name: Smoke-check the binaries run
+        run: |
+          ./vendor-src/femm/build/fkern || true       # prints usage, exit 1 (no arg)
+          test -x ./vendor-src/femm/build/fkern
+          test -x ./vendor-src/femm/build/triangle
+      - uses: actions/upload-artifact@v6
+        with:
+          name: femm-solver-${{ matrix.os }}
+          path: |
+            vendor-src/femm/build/fkern
+            vendor-src/femm/build/triangle

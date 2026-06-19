@@ -34,3 +34,4 @@ go.work.sum
 
 # Vendored FEMM solver sources / build (Phase 2a).
 /vendor-src/**/build/
+/vendor-src/femm/build/

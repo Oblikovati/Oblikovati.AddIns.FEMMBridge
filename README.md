@@ -45,6 +45,15 @@ make install    # build + copy library + manifest into the host's add-ins dir
 make test       # cgo-free bridge unit tests + bridge<->host integration
 ```
 
+The vendored FEMM solver (`fkern`) + Triangle mesher build headless on macOS and
+Linux via CMake (verified building/linking/running on Linux; both platforms are
+built in CI — see the `femm-solver` job):
+
+```sh
+cmake -S vendor-src/femm -B vendor-src/femm/build -DCMAKE_BUILD_TYPE=Release
+cmake --build vendor-src/femm/build -j      # -> fkern, triangle
+```
+
 Local dev resolves the sibling `Oblikovati.API` + `Oblikovati` checkouts via a
 git-ignored `go.work`; CI injects the equivalent replaces (`.github/actions/siblings`).
 
