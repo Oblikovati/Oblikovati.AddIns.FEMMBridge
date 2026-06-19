@@ -6,7 +6,7 @@
 #include "complex.h"
 #include "mesh.h"
 #include "spars.h"
-#include "FemmeDocCore.h"
+#include "femmedoccore.h"
 #define Log log
 
 // #define NEWTON

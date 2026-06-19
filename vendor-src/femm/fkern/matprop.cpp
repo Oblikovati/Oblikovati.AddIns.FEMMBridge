@@ -8,7 +8,7 @@
 #include "mesh.h"
 #include "spars.h"
 #include "fullmatrix.h"
-#include "FemmeDocCore.h"
+#include "femmedoccore.h"
 
 #define ElementsPerSkinDepth 10
 

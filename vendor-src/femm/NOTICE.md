@@ -25,6 +25,18 @@ exactly as distributed with FEMM 4.2 (21 Apr 2019); upstream release notes are i
 words, that it *"is not the same as any of the GNU Licenses … Its terms are
 substantially different."*
 
+### Portability modifications (license unchanged)
+
+The vendored sources are modified ONLY for cross-platform builds; every file remains
+under its original license (AFPL for FEMM, Triangle's own license, Lua's). FEMM 4.2
+ships several files whose names differ only in case (`COMPLEX.H`/`complex.h`,
+`FemmeDocCore.h`/`femmedoccore.h`, `StdAfx.h`/`stdafx.h`) — these cannot coexist on a
+case-insensitive filesystem (macOS, Windows). To build on those platforms the
+case-duplicate files were unified: FEMM's complex-number header/impl were renamed to
+`femmcomplex.h`/`femmcomplex.cpp` (also avoiding a clash with the C standard
+`<complex.h>`), the redundant case-variant headers were removed, and the `#include`
+lines were updated to match. No solver logic was changed.
+
 ## Why this is segregated, and how the add-in stays license-clean
 
 The AFPL is **incompatible with the GPL** and carries **non-commercial use/distribution

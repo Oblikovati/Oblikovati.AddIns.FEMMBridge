@@ -27,7 +27,7 @@ add_compile_definitions(LINUX)
 # redirected here and its complex.cpp is dropped from the fkern target, so CComplex
 # is defined exactly once and there are no duplicate-symbol link errors.
 file(GLOB LUA_SRC "${CMAKE_CURRENT_SOURCE_DIR}/liblua/*.cpp")
-list(APPEND LUA_SRC "${CMAKE_CURRENT_SOURCE_DIR}/liblua/COMPLEX.CPP")
+list(APPEND LUA_SRC "${CMAKE_CURRENT_SOURCE_DIR}/liblua/femmcomplex.cpp")
 add_library(femmlua STATIC ${LUA_SRC})
 target_include_directories(femmlua PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/liblua")
 
