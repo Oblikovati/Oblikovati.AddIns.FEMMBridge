@@ -17,5 +17,5 @@ go 1.24.0
 
 require (
 	oblikovati.org v0.0.0
-	oblikovati.org/api v0.69.0
+	oblikovati.org/api v0.71.0
 )

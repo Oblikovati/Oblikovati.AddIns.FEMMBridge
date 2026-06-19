@@ -8,10 +8,13 @@
 package bridge
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
+	"sync"
 
 	"oblikovati.org/api/client"
+	"oblikovati.org/api/wire"
 )
 
 // HostCaller is the transport the engine talks to the host through — exactly the
@@ -23,15 +26,22 @@ type HostCaller interface {
 
 // Engine runs magnetics studies against a live host.
 type Engine struct {
-	host    HostCaller
-	api     *client.Client
-	sourceJ float64 // study excitation: uniform current density (MA/m^2) on region 0
+	host     HostCaller
+	api      *client.Client
+	sourceJ  float64 // study excitation: uniform current density (MA/m^2) on region 0
+	scaleMax float64 // |B| color-scale ceiling (tesla) for the tint + legend
+
+	mu      sync.Mutex // guards running + the sim params
+	running bool       // a study is in flight (coalesces overlapping command triggers)
 }
 
-// NewEngine binds the engine to the host transport.
+// NewEngine binds the engine to the host transport with the default simulation parameters.
 func NewEngine(host HostCaller) *Engine {
-	return &Engine{host: host, api: client.New(host)}
+	return &Engine{host: host, api: client.New(host), scaleMax: defaultScaleMax}
 }
+
+// defaultScaleMax is the default |B| color-scale ceiling (tesla); see fieldScaleMax.
+const defaultScaleMax = 2.0
 
 // SetSourceCurrent sets the study excitation — a uniform current density (MA/m^2)
 // applied to the first region. Returns the engine for chaining. Interim stand-in
@@ -41,10 +51,96 @@ func (e *Engine) SetSourceCurrent(jr float64) *Engine {
 	return e
 }
 
-// Notify receives host event bytes. Magnetics studies are user-triggered (a ribbon
-// command in a later phase); for now events are accepted and ignored so the C-ABI
-// Notify path is wired end to end.
-func (e *Engine) Notify(_ []byte) {}
+// RunStudyCommandID is the host command the add-in registers; firing it (a ribbon click or
+// the MCP bridge's execute_command) runs the magnetics study on the active motor.
+const RunStudyCommandID = "FEMM.RunStudy"
+
+// RegisterCommands registers the magnetics study command with the host so it is invokable the
+// same way a ribbon click is — including over the MCP bridge's execute_command. The host action
+// is a no-op; executing the command fires command.started, which Notify turns into a study run.
+func (e *Engine) RegisterCommands() error {
+	_, err := e.api.Commands().Create(wire.CreateCommandArgs{
+		ID:          RunStudyCommandID,
+		DisplayName: "Run Magnetics Study",
+		Category:    "FEMM",
+		Tooltip:     "Solve the |B| field for the active motor and tint its surfaces by flux density.",
+	})
+	return err
+}
+
+// Setup performs the one-time host-facing initialization: register the study command and show
+// the simulation-parameters panel. It MUST NOT run on the host's session goroutine (host calls
+// there block until the frame loop drains the dispatcher, deadlocking the head) — the cgo shell
+// runs it on its own goroutine.
+func (e *Engine) Setup() error {
+	if err := e.RegisterCommands(); err != nil {
+		return err
+	}
+	_, err := e.ShowPanel()
+	return err
+}
+
+// Notify receives host event bytes. A command.started carrying RunStudyCommandID runs the
+// magnetics study on a SEPARATE goroutine — never inline, because Notify is invoked on the
+// host's session goroutine and a host call from there blocks until the frame loop drains the
+// dispatcher (which cannot happen while we're inside it), deadlocking every host call. A guard
+// coalesces overlapping triggers so one study is in flight at a time.
+func (e *Engine) Notify(ev []byte) {
+	var hdr struct {
+		Type string `json:"type"`
+	}
+	if json.Unmarshal(ev, &hdr) != nil {
+		return
+	}
+	switch hdr.Type {
+	case wire.EventCommandStarted:
+		var c struct {
+			Command string `json:"command"`
+		}
+		if json.Unmarshal(ev, &c) == nil && c.Command == RunStudyCommandID {
+			e.launchStudy()
+		}
+	case wire.EventPanelValueChanged:
+		var p struct {
+			WindowId  string `json:"windowId"`
+			ControlId string `json:"controlId"`
+			Value     string `json:"value"`
+		}
+		// Editing a sim parameter only mutates engine state (no host call) — safe inline.
+		if json.Unmarshal(ev, &p) == nil && p.WindowId == FEMMPanelID {
+			e.applyPanelEdit(p.ControlId, p.Value)
+		}
+	}
+}
+
+// launchStudy starts one study goroutine, coalescing overlapping triggers, and reports the
+// outcome to the host status bar so a failed solve is visible rather than silently empty.
+func (e *Engine) launchStudy() {
+	e.mu.Lock()
+	if e.running {
+		e.mu.Unlock()
+		return
+	}
+	e.running = true
+	e.mu.Unlock()
+
+	go func() {
+		defer func() {
+			e.mu.Lock()
+			e.running = false
+			e.mu.Unlock()
+		}()
+		if _, err := e.RunMotorStudyOnHost(); err != nil {
+			e.reportStatus("FEMM study failed: " + err.Error())
+			return
+		}
+		e.reportStatus("FEMM study complete: |B| field tinted onto the motor.")
+	}()
+}
+
+// reportStatus surfaces a study's outcome on the host status bar (best-effort: a status
+// failure must not mask the study result).
+func (e *Engine) reportStatus(msg string) { _, _ = e.api.Status().SetText(msg) }
 
 // StudyResult summarizes one magnetics run.
 type StudyResult struct {

@@ -59,7 +59,13 @@ func ObkAddInActivate(call C.ObkHostCall, freeFn C.ObkHostFree) C.int {
 		return C.OBK_OK
 	}
 	hostCall, hostFree = call, freeFn
-	engine = bridge.NewEngine(cgoHostCaller{})
+	eng := bridge.NewEngine(cgoHostCaller{})
+	engine = eng
+	// Register the study command OFF the session goroutine: Activate runs on the host's session
+	// goroutine before the frame loop starts, and a host call there blocks until the loop drains
+	// the dispatcher — so registering inline would deadlock the head (same pattern as the MCP
+	// bridge + MotorDesigner). The running frame loop drains this goroutine's host calls.
+	go func() { _ = eng.Setup() }()
 	return C.OBK_OK
 }
 
