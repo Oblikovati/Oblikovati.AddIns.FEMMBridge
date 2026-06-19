@@ -9,6 +9,7 @@ package bridge
 
 import (
 	"fmt"
+	"os"
 
 	"oblikovati.org/api/client"
 )
@@ -38,7 +39,7 @@ func (e *Engine) Notify(_ []byte) {}
 
 // StudyResult summarizes one magnetics run.
 type StudyResult struct {
-	FemPath          string
+	AnsPath          string // the fkern .ans solution file
 	PointCount       int
 	RegionCount      int
 	FieldVertices    int
@@ -46,8 +47,10 @@ type StudyResult struct {
 }
 
 // RunStudy is the end-to-end add-in flow for one body: section it, resolve region
-// materials, emit a FEMM .fem, and render the |B| field as client graphics. Phase 2
-// swaps the synthetic field for the vendored solver's parsed .ans solution.
+// materials, build + solve the FEMM problem (write .fem/.poly/.pbc, mesh with
+// triangle, solve with fkern), and render the |B| field as client graphics. The
+// .ans solution is parsed into the real field by parseAns (the synthetic field is
+// the interim render until that lands).
 func (e *Engine) RunStudy(bodyIndex int) (*StudyResult, error) {
 	section, err := e.extractSection(bodyIndex)
 	if err != nil {
@@ -57,9 +60,9 @@ func (e *Engine) RunStudy(bodyIndex int) (*StudyResult, error) {
 	if err != nil {
 		return nil, fmt.Errorf("region materials: %w", err)
 	}
-	femPath, pts, err := emitFEM(section, regions)
+	ansPath, err := e.solveStudy(section, regions)
 	if err != nil {
-		return nil, fmt.Errorf("emit .fem: %w", err)
+		return nil, err
 	}
 	field := syntheticField(section)
 	clientID, err := e.pushFieldHeatmap(field)
@@ -67,10 +70,28 @@ func (e *Engine) RunStudy(bodyIndex int) (*StudyResult, error) {
 		return nil, fmt.Errorf("push |B| heatmap: %w", err)
 	}
 	return &StudyResult{
-		FemPath:          femPath,
-		PointCount:       pts,
+		AnsPath:          ansPath,
+		PointCount:       section.pointCount(),
 		RegionCount:      len(regions),
 		FieldVertices:    field.vertexCount(),
 		GraphicsClientID: clientID,
 	}, nil
+}
+
+// solveStudy builds the FEMM problem from the section + materials and runs the
+// vendored toolchain, returning the .ans path. The work files live in a temp dir.
+func (e *Engine) solveStudy(s *section, regions []regionMaterial) (string, error) {
+	prob, mesh, err := buildProblem(s, regions)
+	if err != nil {
+		return "", err
+	}
+	bins, err := findSolverBinaries()
+	if err != nil {
+		return "", err
+	}
+	dir, err := os.MkdirTemp("", "femm-study")
+	if err != nil {
+		return "", fmt.Errorf("study workdir: %w", err)
+	}
+	return runSolve(dir, "study", prob, mesh, bins)
 }

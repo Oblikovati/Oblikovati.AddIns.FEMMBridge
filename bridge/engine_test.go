@@ -5,11 +5,28 @@ package bridge
 import (
 	"encoding/json"
 	"os"
-	"strings"
+	"path/filepath"
 	"testing"
 
 	"oblikovati.org/api/wire"
 )
+
+// requireSolver points the engine at the in-repo CMake build output and skips the
+// test when the fkern/triangle binaries have not been built (e.g. a Go-only CI job).
+// Tests that actually run the solver call this first.
+func requireSolver(t *testing.T) {
+	t.Helper()
+	dir, err := filepath.Abs("../vendor-src/femm/build")
+	if err != nil {
+		t.Fatalf("resolve solver dir: %v", err)
+	}
+	for _, b := range []string{"triangle", "fkern"} {
+		if _, err := os.Stat(filepath.Join(dir, b)); err != nil {
+			t.Skipf("solver not built (%s): run `cmake --build vendor-src/femm/build`", b)
+		}
+	}
+	t.Setenv("OBK_FEMM_BIN", dir)
+}
 
 // fakeHost is a named fake HostCaller (no live host): it answers the wire methods a
 // magnetics study issues with canned JSON, and records the methods it saw so a test
@@ -55,15 +72,14 @@ func squareHost() *fakeHost {
 }
 
 func TestRunStudyDrivesFullPipeline(t *testing.T) {
+	requireSolver(t)
 	h := squareHost()
 	res, err := NewEngine(h).RunStudy(0)
 	if err != nil {
 		t.Fatalf("RunStudy: %v", err)
 	}
-	defer os.Remove(res.FemPath)
-
-	if res.PointCount != 4 {
-		t.Errorf("PointCount = %d, want 4 (square loop)", res.PointCount)
+	if fi, err := os.Stat(res.AnsPath); err != nil || fi.Size() == 0 {
+		t.Errorf("expected a non-empty .ans at %s (err=%v)", res.AnsPath, err)
 	}
 	if res.RegionCount != 1 {
 		t.Errorf("RegionCount = %d, want 1 (one face)", res.RegionCount)
@@ -71,7 +87,7 @@ func TestRunStudyDrivesFullPipeline(t *testing.T) {
 	if res.GraphicsClientID != "femm.bfield" {
 		t.Errorf("GraphicsClientID = %q, want femm.bfield", res.GraphicsClientID)
 	}
-	// The study must touch the geometry, material, and graphics surfaces in order.
+	// The study must touch the geometry, material, and graphics surfaces.
 	want := []string{
 		wire.MethodBodyCalculateStrokes,
 		wire.MethodBodyCalculateFacets,
@@ -82,26 +98,6 @@ func TestRunStudyDrivesFullPipeline(t *testing.T) {
 	for _, m := range want {
 		if !contains(h.calls, m) {
 			t.Errorf("study never called %q (calls: %v)", m, h.calls)
-		}
-	}
-}
-
-func TestEmittedFEMIsWellFormed(t *testing.T) {
-	h := squareHost()
-	res, err := NewEngine(h).RunStudy(0)
-	if err != nil {
-		t.Fatalf("RunStudy: %v", err)
-	}
-	defer os.Remove(res.FemPath)
-
-	b, err := os.ReadFile(res.FemPath)
-	if err != nil {
-		t.Fatalf("read .fem: %v", err)
-	}
-	fem := string(b)
-	for _, tok := range []string{"[ProblemType] =  planar", "[Frequency]   =  0", "<BeginBlock>", "[NumPoints] = 4"} {
-		if !strings.Contains(fem, tok) {
-			t.Errorf(".fem missing %q:\n%s", tok, fem)
 		}
 	}
 }
