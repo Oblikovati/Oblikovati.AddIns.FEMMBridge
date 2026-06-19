@@ -1,4 +1,3 @@
-#include <stdafx.h>
 #include "math.h"
 #include "stdio.h"
 #include "complex.h"
@@ -9,6 +8,12 @@ CComplex::CComplex(double x)
 }
 
 CComplex::CComplex(int x)
+{
+	re=(double) x;
+	im=0.;
+}
+
+CComplex::CComplex(__int64 x)
 {
 	re=(double) x;
 	im=0.;
@@ -121,10 +126,57 @@ void CComplex::Set(double x, double y)
 
 char* CComplex::ToString(char *s)
 {
-	if (im<0)
-		sprintf(s,"%.3e - j %.3e",re,fabs(im));
-	else
-		sprintf(s,"%.3e + j %.3e",re,im);
+	if (im==0) sprintf(s,"%.16g",re);
+	else if (im==1)
+	{
+		if (re==0) sprintf(s,"I");
+		else sprintf(s,"%.16g+I",re);
+	}
+	else if (im==-1)
+	{
+		if (re==0) sprintf(s,"-I");
+		else sprintf(s,"%.16g-I",re);
+	}
+	else if (im<0)
+	{
+		if (re!=0) sprintf(s,"%.16g-I*%.16g",re,fabs(im));
+		else  sprintf(s,"-I*%.16g",fabs(im));
+	}
+	else if (im>0)
+	{
+		if (re!=0) sprintf(s,"%.16g+I*%.16g",re,im);
+		else sprintf(s,"I*%.16g",im);
+	}
+	else s[0]=NULL;
+
+	return s;
+}
+
+char* CComplex::ToStringAlt(char *s)
+{
+	if (im==0) sprintf(s,"%g",re);
+	else if (im==1)
+	{
+		if (re==0) sprintf(s,"I");
+		else sprintf(s,"%g+I",re);
+	}
+	else if (im==-1)
+	{
+		if (re==0) sprintf(s,"-I");
+		else sprintf(s,"%g-I",re);
+	}
+	else if (im<0)
+	{
+		if (re!=0) sprintf(s,"%g-I*%g",re,fabs(im));
+		else  sprintf(s,"-I*%g",fabs(im));
+	}
+	else if (im>0)
+	{
+		if (re!=0) sprintf(s,"%g+I*%g",re,im);
+		else sprintf(s,"I*%g",im);
+	}
+	else s[0]=NULL;
+
 	return s;
 }
 
@@ -136,6 +188,11 @@ CComplex CComplex::operator+( const CComplex& z )
 };
 
 CComplex CComplex::operator+( int z )
+{
+	return CComplex(re+((double) z),im);
+};
+
+CComplex CComplex::operator+( __int64 z )
 {
 	return CComplex(re+((double) z),im);
 };
@@ -157,6 +214,11 @@ void CComplex::operator+=( double z )
 };
 
 void CComplex::operator+=( int z )
+{
+	re+=(double) z;
+};
+
+void CComplex::operator+=( __int64 z )
 {
 	re+=(double) z;
 };
@@ -193,6 +255,11 @@ CComplex CComplex::operator-( int z )
 	return CComplex(re-((double) z),im);
 };
 
+CComplex CComplex::operator-( __int64 z )
+{
+	return CComplex(re-((double) z),im);
+};
+
 CComplex CComplex::operator-( double z )
 {
 	return CComplex(re-z,im);
@@ -210,6 +277,11 @@ void CComplex::operator-=( double z )
 };
 
 void CComplex::operator-=( int z )
+{
+	re-=(double) z;
+};
+
+void CComplex::operator-=( __int64 z )
 {
 	re-=(double) z;
 };
@@ -245,6 +317,11 @@ CComplex CComplex::operator*( int z )
 	return CComplex( re*((double) z),im*((double) z) );
 };
 
+CComplex CComplex::operator*( __int64 z )
+{
+	return CComplex( re*((double) z),im*((double) z) );
+};
+
 CComplex CComplex::operator*( double z )
 {
 	return CComplex(re*z,im*z);
@@ -262,6 +339,12 @@ void CComplex::operator*=( double z )
 };
 
 void CComplex::operator*=( int z )
+{
+	re*=(double) z;
+	im*=(double) z;
+};
+
+void CComplex::operator*=( __int64 z )
 {
 	re*=(double) z;
 	im*=(double) z;
@@ -310,6 +393,11 @@ CComplex CComplex::operator/( int z )
 	return CComplex(re/((double) z),im/((double) z));
 };
 
+CComplex CComplex::operator/( __int64 z )
+{
+	return CComplex(re/((double) z),im/((double) z));
+};
+
 CComplex CComplex::operator/( double z )
 {
 	return CComplex(re/z,im/z);
@@ -332,7 +420,36 @@ void CComplex::operator/=( int z )
 	im/=(double) z;
 };
 
+void CComplex::operator/=( __int64 z )
+{
+	re/=(double) z;
+	im/=(double) z;
+};
+
 CComplex operator/( int x, const CComplex& z )
+{
+	double c;
+	CComplex y;
+
+	if(fabs(z.re)>fabs(z.im))
+	{
+		c=z.im/z.re;
+		y.re=1./(z.re*(1.+c*c));
+		y.im=(-c)*y.re;
+	}
+	else{
+		c=z.re/z.im;
+		y.im=(-1.)/(z.im*(1.+c*c));
+		y.re=(-c)*y.im;
+	}
+	
+	y.re*=(double) x;
+	y.im*=(double) x;
+
+	return y;
+}
+
+CComplex operator/( __int64 x, const CComplex& z )
 {
 	double c;
 	CComplex y;
@@ -413,35 +530,132 @@ void CComplex::operator=(int z)
 
 }
 
+void CComplex::operator=(__int64 z)
+{
+	re=(double) z;
+	im=0;
+
+}
+
 //***** Tests ***********************************************
 bool CComplex::operator==( const CComplex& z){
-	if ((z.im==im) && (z.re==re)) return TRUE;
-	return FALSE;
+	if ((z.im==im) && (z.re==re)) return true;
+	return false;
 }
 
 bool CComplex::operator==(double z){
-	if ((z==re) && (im==0)) return TRUE;
-	return FALSE;
+	if ((z==re) && (im==0)) return true;
+	return false;
 }
 
 bool CComplex::operator==(int z){
-	if ((re==(double) z) && (im==0)) return TRUE;
-	return FALSE;
+	if ((re==(double) z) && (im==0)) return true;
+	return false;
+}
+
+bool CComplex::operator==(__int64 z){
+	if ((re==(double) z) && (im==0)) return true;
+	return false;
 }
 
 bool CComplex::operator!=( const CComplex& z){
-	if ((z.re==re) && (z.im==im)) return FALSE;
-	return TRUE;
+	if ((z.re==re) && (z.im==im)) return false;
+	return true;
 }
 
 bool CComplex::operator!=(double z){
-	if ((re!=z) || (im!=0)) return TRUE;
-	return FALSE;
+	if ((re!=z) || (im!=0)) return true;
+	return false;
 }
 
 bool CComplex::operator!=(int z){
-	if ((re!=(double) z) || (im!=0)) return TRUE;
-	return FALSE;
+	if ((re!=(double) z) || (im!=0)) return true;
+	return false;
+}
+
+bool CComplex::operator!=(__int64 z){
+	if ((re!=(double) z) || (im!=0)) return true;
+	return false;
+}
+
+bool CComplex::operator<( const CComplex& z){
+	if (re<z.re) return true;
+	return false;
+}
+
+bool CComplex::operator<(double z){
+	if (re<z) return true;
+	return false;
+}
+
+bool CComplex::operator<(int z){
+	if (re<(double) z) return true;
+	return false;
+}
+
+bool CComplex::operator<(__int64 z){
+	if (re<(double) z) return true;
+	return false;
+}
+
+bool CComplex::operator>( const CComplex& z){
+	if (re>z.re) return true;
+	return false;
+}
+
+bool CComplex::operator>(double z){
+	if (re>z) return true;
+	return false;
+}
+
+bool CComplex::operator>(int z){
+	if (re>(double) z) return true;
+	return false;
+}
+
+bool CComplex::operator>(__int64 z){
+	if (re>(double) z) return true;
+	return false;
+}
+
+bool CComplex::operator<=( const CComplex& z){
+	if (re<=z.re) return true;
+	return false;
+}
+
+bool CComplex::operator<=(double z){
+	if (re<=z) return true;
+	return false;
+}
+
+bool CComplex::operator<=(int z){
+	if (re<=(double) z) return true;
+	return false;
+}
+
+bool CComplex::operator<=(__int64 z){
+	if (re<=(double) z) return true;
+	return false;
+}
+
+bool CComplex::operator>=( const CComplex& z){
+	if (re>=z.re) return true;
+	return false;
+}
+
+bool CComplex::operator>=(double z){
+	if (re>=z) return true;
+	return false;
+}
+
+bool CComplex::operator>=(int z){
+	if (re>=(double) z) return true;
+	return false;
+}
+
+bool CComplex::operator>=(__int64 z){
+	if (re>=(double) z) return true;
+	return false;
 }
 
 //***** Useful functions ************************************
@@ -532,6 +746,11 @@ CComplex cos( const CComplex& x)
 
 CComplex acos( const CComplex& x)
 {
+	if (x.im==0)
+	{
+		if ((x.re<=1) && (x.re>=-1)) return PI/2. - arg(I*x + sqrt(1 - x*x));
+	}
+
 	return PI/2. - arg(I*x + sqrt(1 - x*x)) + I*log(abs(I*x + sqrt(1 - x*x)));
 }
 
@@ -542,6 +761,11 @@ CComplex sin( const CComplex& x)
 
 CComplex asin( const CComplex& x)
 {
+	if (x.im==0)
+	{
+		if ((x.re<=1) && (x.re>=-1)) return arg(I*x + sqrt(1 - x*x));
+	}
+
 	return arg(I*x + sqrt(1 - x*x)) - I*log(abs(I*x + sqrt(1 - x*x)));
 }
 
@@ -552,9 +776,18 @@ CComplex tan( const CComplex& x)
 
 CComplex atan( const CComplex& x)
 {
+	if (x.im==0) return CComplex(atan(x.re),0);
+
 	return (arg(1+I*x) - arg(1-I*x) - I*(log(abs(1+I*x)/abs(1-I*x))))/ 2;
 }
 
+CComplex atan2( const CComplex& y, const CComplex& x)
+{
+	if ((y.im==0) && (x.im==0)) return CComplex(atan2(y.re,x.re),0);
+
+	return (arg((x+I*y)/sqrt(x*x+y*y)) - I*log(abs(x+I*y)/sqrt(abs(x*x+y*y))));
+}
+ 
 double abs( const CComplex& x)
 {
 	if ((x.re==0) && (x.im==0)) return 0.;
@@ -563,6 +796,11 @@ double abs( const CComplex& x)
 		return fabs(x.re)*sqrt(1.+(x.im/x.re)*(x.im/x.re));
 	else
 		return fabs(x.im)*sqrt(1.+(x.re/x.im)*(x.re/x.im));
+}
+
+double absq( const CComplex& x)
+{
+	return (x.re*x.re + x.im*x.im);
 }
 
 double arg( const CComplex& x)
@@ -580,11 +818,6 @@ CComplex log( const CComplex& x)
 	y.re=log(abs(x));
 
 	return y;
-}
-
-CComplex pow( const CComplex& x, double y)
-{
-	return exp(y*log(x));
 }
 
 CComplex pow( const CComplex& x, int y)
@@ -607,8 +840,16 @@ CComplex pow( const CComplex& x, int y)
 	return z;
 }
 
+CComplex pow( const CComplex& x, double y)
+{
+	if (y==floor(y)) return pow(x,(int) y);
+	return exp(y*log(x));
+}
+
 CComplex pow( const CComplex& x, const CComplex& y)
 {
+	if ((y.im==0) && (y.re==floor(y.re))) return pow(x,(int) y.re);
+
 	return exp(y*log(x));
 }
 
@@ -622,3 +863,13 @@ double Im( const CComplex& a)
 	return a.im;
 }
 
+CComplex Chop( const CComplex& a, double tol)
+{
+	CComplex b;
+	
+	b=a;
+	if (fabs(a.re)<tol) b.re=0;
+	if (fabs(a.im)<tol) b.im=0;
+
+	return b;
+}

@@ -1,39 +1,15 @@
-// fkn.h : main header file for the FKN application
-//
+// PORT (Oblikovati FEMM bridge, mac/linux): headless replacement for FEMM's MFC
+// application header (originally declared CFknApp : CWinApp + old_main, behind an
+// __AFXWIN_H__ precompiled-header guard). The solver numerics include this only for
+// the shared types and old_main; the MFC app class is dropped. Governed by
+// vendor-src/femm/NOTICE.md (third-party build glue).
+#ifndef FKN_SHIM_H
+#define FKN_SHIM_H
 
-#ifndef __AFXWIN_H__
-	#error include 'stdafx.h' before including this file for PCH
-#endif
-
-#include "resource.h"		// main symbols
+#include "femmcompat.h"
+#include "fknDlg.h"
+#include "resource.h"
 
 void old_main(void *inptr);
 
-/////////////////////////////////////////////////////////////////////////////
-// CFknApp:
-// See fkn.cpp for the implementation of this class
-//
-
-class CFknApp : public CWinApp
-{
-public:
-	CFknApp();
-
-// Overrides
-	// ClassWizard generated virtual function overrides
-	//{{AFX_VIRTUAL(CFknApp)
-	public:
-	virtual BOOL InitInstance();
-	//}}AFX_VIRTUAL
-
-// Implementation
-
-	//{{AFX_MSG(CFknApp)
-		// NOTE - the ClassWizard will add and remove member functions here.
-		//    DO NOT EDIT what you see in these blocks of generated code !
-	//}}AFX_MSG
-	DECLARE_MESSAGE_MAP()
-};
-
-
-/////////////////////////////////////////////////////////////////////////////
+#endif // FKN_SHIM_H
