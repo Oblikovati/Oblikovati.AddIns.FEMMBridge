@@ -14,11 +14,20 @@ type field struct {
 
 func (f *field) vertexCount() int { return len(f.verts) }
 
-// bFieldMapper is the |B| legend: blue (low) → red (high), tesla.
+// bFieldMapper is the |B| legend: a bright 5-stop jet (blue→cyan→green→yellow→red) ranged
+// 0..2 T. Most of the iron runs 1–2 T while the tooth tips saturate past it, so spanning 2 T
+// (rather than 1 T) keeps the yoke/tooth contrast instead of clamping the whole core to red;
+// the field can spike higher at re-entrant corners, which simply pins to the top color.
 func bFieldMapper() wire.GraphicsColorMapper {
 	return wire.GraphicsColorMapper{
-		Values: []float64{0, 0.5, 1.0},
-		Colors: []float32{0, 0, 1, 1, 0, 1, 0, 1, 1, 0, 0, 1},
+		Values: []float64{0, 0.5, 1.0, 1.5, 2.0},
+		Colors: []float32{
+			0.10, 0.20, 0.90, 1, // 0.0 T  blue
+			0.00, 0.80, 1.00, 1, // 0.5 T  cyan
+			0.20, 0.90, 0.20, 1, // 1.0 T  green
+			1.00, 0.90, 0.00, 1, // 1.5 T  yellow
+			1.00, 0.10, 0.00, 1, // 2.0 T  red
+		},
 	}
 }
 
@@ -37,8 +46,15 @@ func (e *Engine) pushFieldHeatmap(f *field) (string, error) {
 	for _, p := range f.verts {
 		coords = append(coords, p.X, p.Y, 0)
 	}
-	if _, err := e.api.Graphics().AddHeatmap(clientID, coords, f.indices, f.scalars, mapper); err != nil {
+	// Draw the |B| field as a translucent flood plot ON TOP of the analyzed motor geometry so
+	// it projects over the stator/rotor/magnets rather than being occluded — the result must be
+	// read against the parts it was solved on. 0.6 lets the part edges show through the field.
+	if _, err := e.api.Graphics().AddFloodPlot(clientID, coords, f.indices, f.scalars, mapper, floodPlotOpacity); err != nil {
 		return "", err
 	}
 	return clientID, nil
 }
+
+// floodPlotOpacity is the |B| overlay's translucency: opaque enough to read the field, sheer
+// enough that the motor parts underneath stay visible.
+const floodPlotOpacity = 0.6

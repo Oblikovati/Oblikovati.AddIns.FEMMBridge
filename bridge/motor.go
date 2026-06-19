@@ -205,6 +205,21 @@ func dedupSegments(in []polySegment, canon []int) []polySegment {
 // magnetostatic field with the vendored toolchain, and push the |B| heatmap to the
 // host viewport.
 func (e *Engine) RunMotorStudy(descriptorPath string) (*StudyResult, error) {
+	field, err := e.solveMotorField(descriptorPath)
+	if err != nil {
+		return nil, err
+	}
+	clientID, err := e.pushFieldHeatmap(field)
+	if err != nil {
+		return nil, fmt.Errorf("push |B| heatmap: %w", err)
+	}
+	return &StudyResult{FieldVertices: field.vertexCount(), GraphicsClientID: clientID}, nil
+}
+
+// solveMotorField runs the descriptor's multi-region magnetostatic problem through the
+// vendored toolchain and returns the parsed |B| field (vertices in cm, scalars in tesla).
+// Both the flood-plot render and the surface-tint render share this solve.
+func (e *Engine) solveMotorField(descriptorPath string) (*field, error) {
 	desc, err := readMotorDescriptor(descriptorPath)
 	if err != nil {
 		return nil, err
@@ -222,7 +237,11 @@ func (e *Engine) RunMotorStudy(descriptorPath string) (*StudyResult, error) {
 	if err != nil {
 		return nil, err
 	}
-	return e.renderAns(ans)
+	sol, err := parseAns(ans)
+	if err != nil {
+		return nil, fmt.Errorf("parse solution: %w", err)
+	}
+	return solutionField(sol), nil
 }
 
 // regionMaterialFEM maps a motor region to its FEMM block material (iron is μr-only; a
