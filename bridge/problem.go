@@ -17,7 +17,12 @@ const defaultRegionArea = 0.25
 // the .fem physics (femProblem) and the triangle PSLG (polyMesh). First cut: the
 // section's first loop is the outer boundary (A=0), enclosing one region per
 // material. Holes and multi-loop regions are a follow-up — see PIPELINE.md.
-func buildProblem(s *section, regions []regionMaterial) (*femProblem, *polyMesh, error) {
+//
+// sourceJ is a uniform current density (MA/m^2) applied to the first region — the
+// study excitation. Until the host exposes magnetic sources (API gap #3) and the
+// dockable UI sets per-region coil currents, this is how a study is energized; 0
+// gives a source-free (trivial) field.
+func buildProblem(s *section, regions []regionMaterial, sourceJ float64) (*femProblem, *polyMesh, error) {
 	if len(s.loops) == 0 {
 		return nil, nil, fmt.Errorf("buildProblem: section has no boundary loops")
 	}
@@ -26,15 +31,43 @@ func buildProblem(s *section, regions []regionMaterial) (*femProblem, *polyMesh,
 		return nil, nil, fmt.Errorf("buildProblem: outer loop has %d points, need >= 3", len(outer))
 	}
 	mesh := boundaryPolyMesh(outer)
+	materials := femMaterials(regions)
+	materials[0].Jr = sourceJ
 	prob := &femProblem{
 		Frequency:  0,
 		Precision:  1e-8,
 		Planar:     true,
 		Boundaries: []femBoundary{{BdryType: 0}},
-		Materials:  femMaterials(regions),
+		Materials:  materials,
 		Labels:     []femLabel{{X: mesh.Regions[0].X, Y: mesh.Regions[0].Y, BlockType: 1, MaxArea: defaultRegionArea}},
 	}
 	return prob, mesh, nil
+}
+
+// squareProblem builds a side×side cm square (cm) of a μ_r=1 material carrying a
+// uniform current density sourceJ (MA/m^2), with A=0 on all edges — the validated
+// magnetostatic reference, parameterized for the live render demo. The current
+// drives a vector potential that bulges to a centre maximum, so |B| rises toward
+// the boundary.
+func squareProblem(side, sourceJ float64) (*femProblem, *polyMesh) {
+	c, area := side/2, side*side/500
+	prob := &femProblem{
+		Frequency:  0,
+		Precision:  1e-8,
+		Planar:     true,
+		Boundaries: []femBoundary{{BdryType: 0}},
+		Materials:  []femMaterial{{MuX: 1, MuY: 1, Jr: sourceJ}},
+		Labels:     []femLabel{{X: c, Y: c, BlockType: 1, MaxArea: area}},
+	}
+	mesh := &polyMesh{
+		Nodes: []polyNode{{X: 0, Y: 0}, {X: side, Y: 0}, {X: side, Y: side}, {X: 0, Y: side}},
+		Segments: []polySegment{
+			{N0: 0, N1: 1, Marker: -2}, {N0: 1, N1: 2, Marker: -2},
+			{N0: 2, N1: 3, Marker: -2}, {N0: 3, N1: 0, Marker: -2},
+		},
+		Regions: []polyRegion{{X: c, Y: c, Label: 1, MaxArea: area}},
+	}
+	return prob, mesh
 }
 
 // boundaryPolyMesh turns a closed boundary loop into a PSLG: its points become
