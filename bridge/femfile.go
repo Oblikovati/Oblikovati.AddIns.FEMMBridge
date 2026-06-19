@@ -9,10 +9,12 @@ import (
 
 // femMaterial is one [BlockProps] record (a magnetics material). Jr is applied
 // current density in MA/m^2; Mu* are relative permeabilities; Hc is coercivity
-// (A/m) for permanent magnets; Sigma is conductivity (MS/m).
+// (A/m) for permanent magnets; HcAngle is the magnetisation direction (degrees) of
+// that coercivity; Sigma is conductivity (MS/m).
 type femMaterial struct {
 	MuX, MuY float64
 	Hc       float64
+	HcAngle  float64
 	Jr       float64
 	Sigma    float64
 }
@@ -32,6 +34,7 @@ type femLabel struct {
 	BlockType int
 	MaxArea   float64
 	InGroup   int
+	IsDefault bool // the block fkern assigns to every element no region seed claims
 }
 
 // femProblem is the complete .fem problem definition fkern's OnOpenDocument reads.
@@ -92,7 +95,7 @@ func writeFEMMaterials(w io.Writer, ms []femMaterial) {
 		fmt.Fprintf(w, "    <Mu_x> = %g\n", m.MuX)
 		fmt.Fprintf(w, "    <Mu_y> = %g\n", m.MuY)
 		fmt.Fprintf(w, "    <H_c> = %g\n", m.Hc)
-		fmt.Fprintf(w, "    <H_cAngle> = 0\n")
+		fmt.Fprintf(w, "    <H_cAngle> = %g\n", m.HcAngle)
 		fmt.Fprintf(w, "    <J_re> = %g\n", m.Jr)
 		fmt.Fprintf(w, "    <J_im> = 0\n")
 		fmt.Fprintf(w, "    <sigma> = %g\n", m.Sigma)
@@ -108,11 +111,15 @@ func writeFEMMaterials(w io.Writer, ms []femMaterial) {
 
 // writeFEMLabels emits [NumBlockLabels] and one record per label. Field order is
 // x y BlockType MaxArea InCircuit MagDir InGroup Turns IsExternal (fkern parses it
-// positionally).
+// positionally); fkern reads the default-block flag as IsExternal & 2.
 func writeFEMLabels(w io.Writer, ls []femLabel) {
 	fmt.Fprintf(w, "[NumBlockLabels] = %d\n", len(ls))
 	for _, l := range ls {
-		fmt.Fprintf(w, "%.17g %.17g %d %.17g 0 0 %d 1 0\n",
-			l.X, l.Y, l.BlockType, l.MaxArea, l.InGroup)
+		external := 0
+		if l.IsDefault {
+			external = 2
+		}
+		fmt.Fprintf(w, "%.17g %.17g %d %.17g 0 0 %d 1 %d\n",
+			l.X, l.Y, l.BlockType, l.MaxArea, l.InGroup, external)
 	}
 }
