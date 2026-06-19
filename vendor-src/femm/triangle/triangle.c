@@ -357,7 +357,7 @@
 #ifdef CPU86
 #include <float.h>
 #endif /* CPU86 */
-#ifdef LINUX
+#if defined(LINUX) && !defined(__APPLE__)
 #include <fpu_control.h>
 #endif /* LINUX */
 #ifdef TRILIBRARY
@@ -3136,7 +3136,7 @@ void exactinit()
   REAL half;
   REAL check, lastcheck;
   int every_other;
-#ifdef LINUX
+#if defined(LINUX) && !defined(__APPLE__)
   int cword;
 #endif /* LINUX */
 
@@ -3147,7 +3147,7 @@ void exactinit()
   _control87(_PC_53, _MCW_PC); /* Set FPU control word for double precision. */
 #endif /* not SINGLE */
 #endif /* CPU86 */
-#ifdef LINUX
+#if defined(LINUX) && !defined(__APPLE__)
 #ifdef SINGLE
   /*  cword = 4223; */
   cword = 4210;                 /* set FPU control word for single precision */
