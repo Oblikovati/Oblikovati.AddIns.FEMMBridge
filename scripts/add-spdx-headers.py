@@ -23,9 +23,12 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 IDENTIFIER = "GPL-2.0-only"
-# Not part of the licensed Go surface: VCS, tooling, build outputs, and the C ABI
-# header vendored from the Apache-2.0 api module (it keeps its own upstream header).
-SKIP_DIRS = {".git", "scripts", "include", "build"}
+# Not part of the GPL Go surface: VCS, tooling, build outputs, the C ABI header
+# vendored from the Apache-2.0 api module (keeps its own upstream header), and
+# vendor-src — third-party FEMM/Triangle/Lua sources under their OWN licenses
+# (Aladdin Free Public License et al.), which must NEVER be stamped GPL. See
+# vendor-src/femm/NOTICE.md.
+SKIP_DIRS = {".git", "scripts", "include", "build", "vendor-src"}
 
 
 def header(identifier: str) -> str:

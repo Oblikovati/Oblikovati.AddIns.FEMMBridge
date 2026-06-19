@@ -62,7 +62,19 @@ bridge/                                    cgo-free magnetics engine + pipeline
 vendor-src/                                Phase 2: ported headless fkern + Triangle
 ```
 
-## License
+## Licensing (read before vendoring or shipping the solver)
 
-GPL-2.0-only (the add-in is GPL; only the public `oblikovati.org/api` it links is
-Apache-2.0). FEMM is GPL; its vendored solver sources retain their upstream notices.
+This repository is **GPL-2.0-only** — the add-in's own code is GPL; the only thing it
+links is the Apache-2.0 public `oblikovati.org/api`.
+
+**FEMM is NOT GPL.** It is distributed under the **Aladdin Free Public License (AFPL)**
+— a non-GPL, **non-commercial**, GPL-incompatible license. All vendored FEMM source and
+the macOS/Linux build tooling for it live under [`vendor-src/femm/`](./vendor-src/femm/)
+and are governed **entirely** by the upstream licenses documented in
+[`vendor-src/femm/NOTICE.md`](./vendor-src/femm/NOTICE.md) (AFPL for FEMM; separate
+licenses for Triangle and Lua) — **never** by this repo's GPL.
+
+To keep the two legally separate, the AFPL solver is built as a **standalone binary**
+the bridge runs **as a subprocess** (arm's-length, file-based `.fem`/`.ans` exchange);
+the GPL bridge never links FEMM into its own process. See the NOTICE for the
+non-commercial distribution caveat.
