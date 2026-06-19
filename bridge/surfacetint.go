@@ -5,6 +5,7 @@ package bridge
 import (
 	"bufio"
 	"fmt"
+	"io"
 	"math"
 	"os"
 	"strconv"
@@ -107,9 +108,20 @@ func parseOBJ(path string) (*objMesh, error) {
 	}
 	defer f.Close()
 
-	var verts, norms [][3]float64
 	m := &objMesh{}
-	sc := bufio.NewScanner(f)
+	if err := scanOBJ(f, m); err != nil {
+		return nil, err
+	}
+	if len(m.coords) == 0 {
+		return nil, fmt.Errorf("OBJ %s has no triangles", path)
+	}
+	return m, nil
+}
+
+// scanOBJ reads vertex/normal/face lines from r into m, flattening faces as it goes.
+func scanOBJ(r io.Reader, m *objMesh) error {
+	var verts, norms [][3]float64
+	sc := bufio.NewScanner(r)
 	sc.Buffer(make([]byte, 1<<20), 1<<24)
 	for sc.Scan() {
 		fields := strings.Fields(sc.Text())
@@ -125,10 +137,7 @@ func parseOBJ(path string) (*objMesh, error) {
 			appendFace(m, fields[1:], verts, norms)
 		}
 	}
-	if len(m.coords) == 0 {
-		return nil, fmt.Errorf("OBJ %s has no triangles", path)
-	}
-	return m, sc.Err()
+	return sc.Err()
 }
 
 // appendFace fans an OBJ face (3+ corners) into triangles, emitting flattened corners.
