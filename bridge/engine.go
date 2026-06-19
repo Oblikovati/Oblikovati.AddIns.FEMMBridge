@@ -64,7 +64,11 @@ func (e *Engine) RunStudy(bodyIndex int) (*StudyResult, error) {
 	if err != nil {
 		return nil, err
 	}
-	field := syntheticField(section)
+	sol, err := parseAns(ansPath)
+	if err != nil {
+		return nil, fmt.Errorf("parse solution: %w", err)
+	}
+	field := solutionField(sol)
 	clientID, err := e.pushFieldHeatmap(field)
 	if err != nil {
 		return nil, fmt.Errorf("push |B| heatmap: %w", err)

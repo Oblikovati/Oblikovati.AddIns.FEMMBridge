@@ -14,38 +14,6 @@ type field struct {
 
 func (f *field) vertexCount() int { return len(f.verts) }
 
-// syntheticField fabricates a smooth |B| falloff across the section so the
-// visualization path (color mapper + heatmap) is exercised before the solver lands.
-func syntheticField(s *section) *field {
-	f := &field{}
-	for _, loop := range s.loops {
-		for _, p := range loop {
-			f.verts = append(f.verts, p)
-			f.scalars = append(f.scalars, falloff(p))
-		}
-	}
-	f.indices = fanIndices(len(f.verts))
-	return f
-}
-
-// falloff is a placeholder radial |B| ~ 1/(1+r²) about the origin.
-func falloff(p point2) float64 {
-	r2 := p.X*p.X + p.Y*p.Y
-	return 1.0 / (1.0 + r2)
-}
-
-// fanIndices triangulates n vertices as a fan (placeholder topology for the heatmap).
-func fanIndices(n int) []int {
-	if n < 3 {
-		return nil
-	}
-	idx := make([]int, 0, (n-2)*3)
-	for i := 1; i < n-1; i++ {
-		idx = append(idx, 0, i, i+1)
-	}
-	return idx
-}
-
 // bFieldMapper is the |B| legend: blue (low) → red (high), tesla.
 func bFieldMapper() wire.GraphicsColorMapper {
 	return wire.GraphicsColorMapper{
