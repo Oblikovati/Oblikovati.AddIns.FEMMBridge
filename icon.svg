@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Oblikovati FEMM Bridge">
+  <rect width="64" height="64" rx="12" fill="#1f2430"/>
+  <!-- horseshoe magnet with field lines -->
+  <path d="M22 40 V26 a10 10 0 0 1 20 0 V40" fill="none" stroke="#c8cdd8" stroke-width="8" stroke-linecap="butt"/>
+  <rect x="18" y="40" width="8" height="8" fill="#e5484d"/>
+  <rect x="38" y="40" width="8" height="8" fill="#3b82f6"/>
+  <path d="M26 18 a18 14 0 0 1 12 0" fill="none" stroke="#3ddc97" stroke-width="2" opacity="0.8"/>
+  <path d="M24 14 a22 18 0 0 1 16 0" fill="none" stroke="#3ddc97" stroke-width="2" opacity="0.5"/>
+</svg>
