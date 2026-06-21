@@ -3,6 +3,9 @@
   "displayName": "Oblikovati FEMM Bridge",
   "version": "0.69.0",
   "description": "Integrates FEMM (Finite Element Method Magnetics) as a 2D magnetostatics simulation provider: sections a body, meshes and solves with a headless FEMM solver, and renders the |B| field back into the viewport as client graphics.",
+  "license": "GPL-2.0-only",
+  "sourceRepo": "https://github.com/Oblikovati/Oblikovati.AddIns.FEMMBridge",
+  "apiCompat": "0.85",
   "capabilities": [
     "commands",
     "documents",
