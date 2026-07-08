@@ -15,4 +15,4 @@ module oblikovati.org/femm-bridge
 
 go 1.24.0
 
-require oblikovati.org/api v0.107.0
+require oblikovati.org/api v0.108.0
