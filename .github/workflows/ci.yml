@@ -32,7 +32,11 @@ jobs:
       - uses: ./.github/actions/siblings
       - uses: golangci/golangci-lint-action@9fae48acfc02a90574d7c304a1758ef9895495fa # v7
         with:
-          version: v2.1.0
+          # v2.1.0 is built with go1.24 and refuses to lint a go1.27-targeted module
+          # ("the Go language version (go1.24) used to build golangci-lint is lower
+          # than the targeted Go version"). v2.13.0 is the first release built with
+          # go1.27 (golangci/golangci-lint#6642) — the minimal bump that works.
+          version: v2.13.0
 
   # SPDX: every Go file in this GPL repo must carry GPL-2.0-only.
   spdx:
@@ -59,7 +63,11 @@ jobs:
           go-version-file: go.mod
           cache: false
       - uses: ./.github/actions/siblings
-      - run: go install gotest.tools/gotestsum@v1.12.0
+      # v1.12.0/v1.12.1 pull in golang.org/x/tools v0.19.0/v0.24.0, whose
+      # internal/tokeninternal package fails to compile under go1.27's stricter
+      # constant-expression check ("invalid array length -delta * delta").
+      # v1.12.3 bumps x/tools to v0.34.0, which fixed it — the minimal bump that works.
+      - run: go install gotest.tools/gotestsum@v1.12.3
       - name: Test
         run: gotestsum --junitfile test-results-${{ matrix.os }}.xml -- -coverprofile=coverage.out -covermode=count ./bridge/... ./gplpurity/...
       - uses: actions/upload-artifact@v6
