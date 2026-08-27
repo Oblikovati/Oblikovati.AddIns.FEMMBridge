@@ -35,3 +35,6 @@ go.work.sum
 # Vendored FEMM solver sources / build (Phase 2a).
 /vendor-src/**/build/
 /vendor-src/femm/build/
+
+# Local git worktrees used for isolated branch work (`git worktree add .worktrees/...`).
+/.worktrees/
