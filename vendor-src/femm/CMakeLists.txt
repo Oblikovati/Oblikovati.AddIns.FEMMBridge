@@ -34,6 +34,8 @@ target_include_directories(femmlua PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/liblua")
 # --- triangle (Shewchuk mesher) -------------------------------------------------
 # Standalone mesher: do NOT define TRILIBRARY (that #ifdef strips main()).
 add_executable(triangle "${CMAKE_CURRENT_SOURCE_DIR}/triangle/triangle.c")
+# Triangle still uses old-style C declarations, which C23 no longer accepts.
+set_target_properties(triangle PROPERTIES C_STANDARD 17 C_STANDARD_REQUIRED ON)
 if(UNIX)
   target_link_libraries(triangle m)
 endif()
